@@ -50,40 +50,58 @@ http.createServer((req, res) => {
   console.log(`Servidor web escuchando en puerto ${port}`);
 });
 
-// Funciones para abrir y cerrar el grupo con mensajes alegres y llamativos
+// Función formal y estricta para cerrar el grupo verificando su estado
 async function cerrarGrupo() {
   try {
-    await bot.telegram.setChatPermissions(chatId, {
-      can_send_messages: false,
-      can_send_media_messages: false,
-      can_send_polls: false,
-      can_send_other_messages: false,
-      can_add_web_page_previews: false
-    });
+    // Verificar el estado actual del chat en Telegram
+    const chatInfo = await bot.telegram.getChat(chatId);
+    const permisosActuales = chatInfo.permissions;
+
+    // Si los permisos permiten enviar mensajes, significa que está abierto; procedemos a cerrarlo
+    if (permisosActuales && permisosActuales.can_send_messages) {
+      await bot.telegram.setChatPermissions(chatId, {
+        can_send_messages: false,
+        can_send_media_messages: false,
+        can_send_polls: false,
+        can_send_other_messages: false,
+        can_add_web_page_previews: false
+      });
+      console.log("El grupo estaba abierto. Se ha procedido al cierre automático.");
+    } else {
+      console.log("El grupo ya se encontraba cerrado previamente.");
+    }
     
-    const mensaje = `🌙✨ **¡LLEGÓ LA HORA DE DESCANSAR!** ✨🌙\n\n🛑 **¡Atención a todos!** El grupo se ha cerrado oficialmente por el modo nocturno.\n\n🔒 *A partir de este momento, no se pueden enviar mensajes ni fotos en el grupo.*\n\n☀️ Nos vemos mañana a las **${config.horaApertura} hrs** para seguir cotorreando. ¡Que descansen! 💤💙`;
+    // Mensaje formal para el Modo Noche
+    const mensaje = `🌙 **AVISO OFICIAL: INICIO DE MODO NOCTURNO**\n\nEstimada comunidad,\n\nSe les informa que el grupo ha entrado en su período de descanso reglamentario.\n\n🚫 **A partir de este momento, la emisión de mensajes y archivos multimedia queda suspendida temporalmente.**\n\n⏰ Las actividades y la apertura del chat se reanudarán puntualmente mañana a las **${config.horaApertura} hrs**.\n\nAgradecemos su comprensión y colaboración para mantener el orden. ¡Excelente descanso! ⚖️🏛️`;
+    
     await bot.telegram.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
-    console.log("Grupo cerrado correctamente.");
   } catch (error) {
-    console.error("Error al cerrar el grupo:", error);
+    console.error("Error al ejecutar el cierre del grupo:", error);
   }
 }
 
+// Función para abrir el grupo con verificación previa
 async function abrirGrupo() {
   try {
-    await bot.telegram.setChatPermissions(chatId, {
-      can_send_messages: true,
-      can_send_media_messages: true,
-      can_send_polls: true,
-      can_send_other_messages: true,
-      can_add_web_page_previews: true
-    });
-    
-    const mensaje = `🌅🎉 **¡BUENOS DÍAS, GRUPO!** 🎉🌅\n\n🔓 **¡El descanso terminó!** El grupo ya se encuentra abierto nuevamente.\n\n💬 ¡Ya pueden enviar mensajes, fotos y reportarse con toda la actitud!\n\n🚀 ¡Que tengan un excelente día! ✨`;
+    const chatInfo = await bot.telegram.getChat(chatId);
+    const permisosActuales = chatInfo.permissions;
+
+    // Si está cerrado, procedemos a abrirlo
+    if (permisosActuales && !permisosActuales.can_send_messages) {
+      await bot.telegram.setChatPermissions(chatId, {
+        can_send_messages: true,
+        can_send_media_messages: true,
+        can_send_polls: true,
+        can_send_other_messages: true,
+        can_add_web_page_previews: true
+      });
+      console.log("El grupo estaba cerrado. Se ha procedido a su apertura.");
+    }
+
+    const mensaje = `☀️ **REAPERTURA DE ACTIVIDADES** ☀️\n\n¡Buenos días a todos!\n\n🔓 El período de descanso ha concluido. El grupo se encuentra abierto nuevamente para la interacción de los miembros.\n\nLes recordamos mantener una convivencia respetuosa. ¡Que tengan un excelente día! 🚀✨`;
     await bot.telegram.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
-    console.log("Grupo abierto correctamente.");
   } catch (error) {
-    console.error("Error al abrir el grupo:", error);
+    console.error("Error al ejecutar la apertura del grupo:", error);
   }
 }
 
@@ -114,7 +132,7 @@ function programarTareas() {
 
 programarTareas();
 
-// Función auxiliar para convertir formato 12h (ej. "7" o "11:30") + AM/PM a formato 24h ("07:00" o "23:30")
+// Función auxiliar para convertir formato 12h + AM/PM a formato 24h
 function convertirA24h(hora12, ampm) {
   let [h, m] = hora12.split(':');
   let horaNum = parseInt(h);
@@ -135,7 +153,7 @@ bot.command('configurar', (ctx) => {
   delete usuariosEsperandoInput[ctx.from.id];
   
   ctx.reply(
-    '⚙️ **Panel Principal de Configuración**\n\n¿Qué te gustaría ajustar hoy?',
+    '⚙️ **Panel Principal de Configuración**\n\n¿Qué parámetro desea ajustar?',
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
@@ -149,7 +167,7 @@ bot.command('configurar', (ctx) => {
 // Menú de Zonas Horarias
 bot.action('menu_paises', (ctx) => {
   ctx.editMessageText(
-    '🌍 **Selecciona tu país:**',
+    '🌍 **Seleccione su país:**',
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
@@ -164,7 +182,7 @@ bot.action('menu_paises', (ctx) => {
 });
 
 bot.action('pais_mexico', (ctx) => {
-  ctx.editMessageText('🇲🇽 **México** - Selecciona tu región:', {
+  ctx.editMessageText('🇲🇽 **México** - Seleccione su región:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
       [Markup.button.callback('Centro / CDMX', 'tz_America/Mexico_City')],
@@ -210,7 +228,7 @@ bot.action('pais_colombia', (ctx) => {
 bot.action('menu_horarios', (ctx) => {
   delete usuariosEsperandoInput[ctx.from.id];
   ctx.editMessageText(
-    `🕒 **Configuración de Horarios**\n\n🌙 Cierre actual: \`${config.horaCierre}\`\n☀️ Apertura actual: \`${config.horaApertura}\`\n\n¿Qué hora deseas modificar?`,
+    `🕒 **Configuración de Horarios**\n\n🌙 Cierre actual: \`${config.horaCierre}\`\n☀️ Apertura actual: \`${config.horaApertura}\`\n\n¿Qué horario desea modificar?`,
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
@@ -226,7 +244,7 @@ bot.action('menu_horarios', (ctx) => {
 bot.action('pedir_cierre', (ctx) => {
   usuariosEsperandoInput[ctx.from.id] = { tipo: 'cierre', esperandoAMPM: false };
   ctx.editMessageText(
-    '🌙 **Modo Cierre (Modo Noche)**\n\nEscribe la hora numérica del 1 al 12 (puedes incluir minutos como `11` o `11:30`).\n\n*(Escribe el número directamente en el chat)*',
+    '🌙 **Modo Cierre (Modo Noche)**\n\nEscriba la hora numérica del 1 al 12 (puede incluir minutos como `11` o `11:30`).\n\n*(Escriba el número directamente en el chat)*',
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
@@ -240,7 +258,7 @@ bot.action('pedir_cierre', (ctx) => {
 bot.action('pedir_apertura', (ctx) => {
   usuariosEsperandoInput[ctx.from.id] = { tipo: 'apertura', esperandoAMPM: false };
   ctx.editMessageText(
-    '☀️ **Modo Apertura (Mañana)**\n\nEscribe la hora numérica del 1 al 12 (puedes incluir minutos como `7` o `7:30`).\n\n*(Escribe el número directamente en el chat)*',
+    '☀️ **Modo Apertura (Mañana)**\n\nEscriba la hora numérica del 1 al 12 (puede incluir minutos como `7` o `7:30`).\n\n*(Escribe el número directamente en el chat)*',
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
@@ -250,7 +268,7 @@ bot.action('pedir_apertura', (ctx) => {
   );
 });
 
-// Capturar texto de hora y luego mostrar botones AM / PM
+// Capturar texto de hora y mostrar botones AM / PM
 bot.on('text', (ctx) => {
   const userId = ctx.from.id;
   const estado = usuariosEsperandoInput[userId];
@@ -261,14 +279,14 @@ bot.on('text', (ctx) => {
   const regex12h = /^([1-9]|1[0-2])(:([0-5]\d))?$/;
 
   if (!regex12h.test(texto)) {
-    return ctx.reply('⚠️ Formato inválido. Escribe un número del 1 al 12, opcionalmente con minutos (Ejemplo: `11` o `11:30`).', { parse_mode: 'Markdown' });
+    return ctx.reply('⚠️ Formato inválido. Escriba un número del 1 al 12, opcionalmente con minutos (Ejemplo: `11` o `11:30`).', { parse_mode: 'Markdown' });
   }
 
   estado.horaParcial = texto;
   estado.esperandoAMPM = true;
 
   ctx.reply(
-    `⏰ Has escrito: **${texto}**.\n\nAhora selecciona si es **AM** o **PM** usando los botones de abajo: 👇`,
+    `⏰ Ha ingresado: **${texto}**.\n\nAhora seleccione si corresponde a **AM** o **PM** mediante los siguientes botones: 👇`,
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
@@ -279,14 +297,14 @@ bot.on('text', (ctx) => {
   );
 });
 
-// Procesar selección de AM o PM mediante botones
+// Procesar selección de AM o PM
 bot.action(/^ampm_(AM|PM)$/, (ctx) => {
   const ampm = ctx.match[1];
   const userId = ctx.from.id;
   const estado = usuariosEsperandoInput[userId];
 
   if (!estado || !estado.horaParcial) {
-    return ctx.editMessageText('⚠️ La sesión expiró o hubo un error. Usa /configurar nuevamente.');
+    return ctx.editMessageText('⚠️ La sesión ha expirado o se produjo un error. Utilice /configurar nuevamente.');
   }
 
   const hora24 = convertirA24h(estado.horaParcial, ampm);
@@ -302,7 +320,7 @@ bot.action(/^ampm_(AM|PM)$/, (ctx) => {
   delete usuariosEsperandoInput[userId];
 
   ctx.editMessageText(
-    `✅ **¡Horario actualizado con éxito!** 🎉\n\n🌙 Nuevo Cierre: \`${config.horaCierre}\`\n☀️ Nueva Apertura: \`${config.horaApertura}\`\n\n¡Listo! Puedes usar /configurar cuando quieras cambiar algo más.`,
+    `✅ **¡Horario actualizado correctamente!**\n\n🌙 Nuevo Cierre: \`${config.horaCierre}\`\n☀️ Nueva Apertura: \`${config.horaApertura}\`\n\nPuede utilizar /configurar en cualquier momento para realizar modificaciones adicionales.`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -311,7 +329,7 @@ bot.action(/^ampm_(AM|PM)$/, (ctx) => {
 bot.action('volver_menu', (ctx) => {
   delete usuariosEsperandoInput[ctx.from.id];
   ctx.editMessageText(
-    '⚙️ **Panel Principal de Configuración**\n\n¿Qué te gustaría ajustar hoy?',
+    '⚙️ **Panel Principal de Configuración**\n\n¿Qué parámetro desea ajustar?',
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
@@ -330,7 +348,7 @@ bot.action(/^tz_(.+)$/, (ctx) => {
   programarTareas();
 
   ctx.editMessageText(
-    `✅ **¡Zona horaria actualizada con éxito!** 🌍\n\nNueva zona: \`${selectedTz}\`\n\nPuedes volver al menú principal escribiendo /configurar`,
+    `✅ **¡Zona horaria actualizada con éxito!**\n\nNueva zona: \`${selectedTz}\`\n\nPuede regresar al menú principal enviando el comando /configurar`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -338,13 +356,13 @@ bot.action(/^tz_(.+)$/, (ctx) => {
 // Comando de estado
 bot.command('estado', (ctx) => {
   ctx.reply(
-    `📊 **Estado Actual del Bot de Horarios**\n\n🌍 Zona: \`${config.timezone}\`\n🌙 Cierre (Modo Noche): \`${config.horaCierre}\`\n☀️ Apertura: \`${config.horaApertura}\``,
+    `📊 **Estado Actual del Bot de Horarios**\n\n🌍 Zona horaria: \`${config.timezone}\`\n🌙 Cierre (Modo Noche): \`${config.horaCierre}\`\n☀️ Apertura: \`${config.horaApertura}\``,
     { parse_mode: 'Markdown' }
   );
 });
 
 bot.launch().then(() => {
-  console.log("Bot moderno iniciado correctamente...");
+  console.log("Bot formal y seguro iniciado correctamente...");
 });
 
 process.once('SIGINT', () => bot.stop('SIGINT'));

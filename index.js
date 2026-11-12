@@ -38,7 +38,7 @@ function guardarConfig() {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 }
 
-// Objeto para registrar qué usuario está escribiendo una hora personalizada
+// Control de estados para usuarios configurando horas interactivas
 const usuariosEsperandoInput = {};
 
 // Servidor web para Koyeb (mantiene el bot activo)
@@ -50,7 +50,7 @@ http.createServer((req, res) => {
   console.log(`Servidor web escuchando en puerto ${port}`);
 });
 
-// Funciones para abrir y cerrar el grupo con mensajes dinámicos
+// Funciones para abrir y cerrar el grupo con mensajes alegres y llamativos
 async function cerrarGrupo() {
   try {
     await bot.telegram.setChatPermissions(chatId, {
@@ -61,7 +61,7 @@ async function cerrarGrupo() {
       can_add_web_page_previews: false
     });
     
-    const mensaje = `🌙 **MODO NOCHE ACTIVADO**\n\n🛑 **A PARTIR DE AHORA, NO SE PUEDEN MANDAR MENSAJES NI FOTOS EN EL GRUPO HASTA LAS ${config.horaApertura} HS.**`;
+    const mensaje = `🌙✨ **¡LLEGÓ LA HORA DE DESCANSAR!** ✨🌙\n\n🛑 **¡Atención a todos!** El grupo se ha cerrado oficialmente por el modo nocturno.\n\n🔒 *A partir de este momento, no se pueden enviar mensajes ni fotos en el grupo.*\n\n☀️ Nos vemos mañana a las **${config.horaApertura} hrs** para seguir cotorreando. ¡Que descansen! 💤💙`;
     await bot.telegram.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
     console.log("Grupo cerrado correctamente.");
   } catch (error) {
@@ -79,7 +79,7 @@ async function abrirGrupo() {
       can_add_web_page_previews: true
     });
     
-    const mensaje = `☀️ **¡BUENOS DÍAS!**\n\n🔓 El grupo se ha abierto nuevamente. ¡Ya pueden enviar mensajes y fotos!`;
+    const mensaje = `🌅🎉 **¡BUENOS DÍAS, GRUPO!** 🎉🌅\n\n🔓 **¡El descanso terminó!** El grupo ya se encuentra abierto nuevamente.\n\n💬 ¡Ya pueden enviar mensajes, fotos y reportarse con toda la actitud!\n\n🚀 ¡Que tengan un excelente día! ✨`;
     await bot.telegram.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
     console.log("Grupo abierto correctamente.");
   } catch (error) {
@@ -114,21 +114,33 @@ function programarTareas() {
 
 programarTareas();
 
+// Función auxiliar para convertir formato 12h (ej. "7" o "11:30") + AM/PM a formato 24h ("07:00" o "23:30")
+function convertirA24h(hora12, ampm) {
+  let [h, m] = hora12.split(':');
+  let horaNum = parseInt(h);
+  let minStr = m || '00';
+  
+  if (ampm === 'PM' && horaNum < 12) horaNum += 12;
+  if (ampm === 'AM' && horaNum === 12) horaNum = 0;
+  
+  let horaStr = horaNum.toString().padStart(2, '0');
+  return `${horaStr}:${minStr}`;
+}
+
 // ---------------------------------------------------------
-// MENÚS Y COMANDOS
+// MENÚS Y COMANDOS INTERACTIVOS
 // ---------------------------------------------------------
 
 bot.command('configurar', (ctx) => {
-  // Limpiar estados previos si existían
   delete usuariosEsperandoInput[ctx.from.id];
   
   ctx.reply(
-    '⚙️ **Panel Principal de Configuración**\nSelecciona una opción:',
+    '⚙️ **Panel Principal de Configuración**\n\n¿Qué te gustaría ajustar hoy?',
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
         [Markup.button.callback('🌍 Cambiar Zona Horaria', 'menu_paises')],
-        [Markup.button.callback('🕒 Cambiar Horarios (Personalizar)', 'menu_horarios')]
+        [Markup.button.callback('🕒 Personalizar Horarios (12h)', 'menu_horarios')]
       ])
     }
   );
@@ -194,80 +206,117 @@ bot.action('pais_colombia', (ctx) => {
   });
 });
 
-// Menú de Horarios Personalizados
+// Menú de Horarios
 bot.action('menu_horarios', (ctx) => {
   delete usuariosEsperandoInput[ctx.from.id];
   ctx.editMessageText(
-    `🕒 **Configuración de Horarios**\n\n🌙 Hora de Cierre actual: \`${config.horaCierre}\`\n☀️ Hora de Apertura actual: \`${config.horaApertura}\`\n\n¿Qué hora deseas modificar?`,
+    `🕒 **Configuración de Horarios**\n\n🌙 Cierre actual: \`${config.horaCierre}\`\n☀️ Apertura actual: \`${config.horaApertura}\`\n\n¿Qué hora deseas modificar?`,
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
-        [Markup.button.callback('🌙 Escribir nueva Hora de Cierre', 'pedir_cierre')],
-        [Markup.button.callback('☀️ Escribir nueva Hora de Apertura', 'pedir_apertura')],
+        [Markup.button.callback('🌙 Cambiar Hora de Cierre', 'pedir_cierre')],
+        [Markup.button.callback('☀️ Cambiar Hora de Apertura', 'pedir_apertura')],
         [Markup.button.callback('⬅️ Volver al Menú Principal', 'volver_menu')]
       ])
     }
   );
 });
 
-// Solicitar hora de cierre por texto
+// Solicitar hora de cierre
 bot.action('pedir_cierre', (ctx) => {
-  usuariosEsperandoInput[ctx.from.id] = 'cierre';
+  usuariosEsperandoInput[ctx.from.id] = { tipo: 'cierre', esperandoAMPM: false };
   ctx.editMessageText(
-    '🌙 **Modo Cierre Personalizado**\n\nPor favor, escribe la nueva hora de cierre en formato de 24 horas (`HH:MM`).\n*Ejemplo:* `23:30` o `22:00`\n\n*(Escribe el texto directamente en el chat)*',
-    { parse_mode: 'Markdown' }
+    '🌙 **Modo Cierre (Modo Noche)**\n\nEscribe la hora numérica del 1 al 12 (puedes incluir minutos como `11` o `11:30`).\n\n*(Escribe el número directamente en el chat)*',
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('⬅️ Volver', 'menu_horarios')]
+      ])
+    }
   );
 });
 
-// Solicitar hora de apertura por texto
+// Solicitar hora de apertura
 bot.action('pedir_apertura', (ctx) => {
-  usuariosEsperandoInput[ctx.from.id] = 'apertura';
+  usuariosEsperandoInput[ctx.from.id] = { tipo: 'apertura', esperandoAMPM: false };
   ctx.editMessageText(
-    '☀️ **Modo Apertura Personalizado**\n\nPor favor, escribe la nueva hora de apertura en formato de 24 horas (`HH:MM`).\n*Ejemplo:* `07:00` o `06:30`\n\n*(Escribe el texto directamente en el chat)*',
-    { parse_mode: 'Markdown' }
+    '☀️ **Modo Apertura (Mañana)**\n\nEscribe la hora numérica del 1 al 12 (puedes incluir minutos como `7` o `7:30`).\n\n*(Escribe el número directamente en el chat)*',
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('⬅️ Volver', 'menu_horarios')]
+      ])
+    }
   );
 });
 
-// Capturar texto enviado por el usuario cuando está configurando una hora
+// Capturar texto de hora y luego mostrar botones AM / PM
 bot.on('text', (ctx) => {
   const userId = ctx.from.id;
   const estado = usuariosEsperandoInput[userId];
 
-  if (!estado) return; // Si no está configurando nada, ignorar
+  if (!estado || estado.esperandoAMPM) return;
 
   const texto = ctx.message.text.trim();
-  // Validar formato HH:MM (ej. 23:00, 07:30)
-  const regexHora = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  const regex12h = /^([1-9]|1[0-2])(:([0-5]\d))?$/;
 
-  if (!regexHora.test(texto)) {
-    return ctx.reply('⚠️ Formato incorrecto. Por favor escríbelo en formato de 24 horas como `HH:MM` (Ejemplo: `23:00`).', { parse_mode: 'Markdown' });
+  if (!regex12h.test(texto)) {
+    return ctx.reply('⚠️ Formato inválido. Escribe un número del 1 al 12, opcionalmente con minutos (Ejemplo: `11` o `11:30`).', { parse_mode: 'Markdown' });
   }
 
-  if (estado === 'cierre') {
-    config.horaCierre = texto;
-    guardarConfig();
-    programarTareas();
-    delete usuariosEsperandoInput[userId];
-    ctx.reply(`✅ **¡Hora de cierre actualizada con éxito!**\n\n🌙 Nuevo cierre: \`${config.horaCierre}\`\n\nUsa /configurar si deseas cambiar algo más.`, { parse_mode: 'Markdown' });
-  } else if (estado === 'apertura') {
-    config.horaApertura = texto;
-    guardarConfig();
-    programarTareas();
-    delete usuariosEsperandoInput[userId];
-    ctx.reply(`✅ **¡Hora de apertura actualizada con éxito!**\n\n☀️ Nueva apertura: \`${config.horaApertura}\`\n\nUsa /configurar si deseas cambiar algo más.`, { parse_mode: 'Markdown' });
-  }
+  estado.horaParcial = texto;
+  estado.esperandoAMPM = true;
+
+  ctx.reply(
+    `⏰ Has escrito: **${texto}**.\n\nAhora selecciona si es **AM** o **PM** usando los botones de abajo: 👇`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('🌅 AM', 'ampm_AM'), Markup.button.callback('🌙 PM', 'ampm_PM')],
+        [Markup.button.callback('⬅️ Cancelar / Volver', 'menu_horarios')]
+      ])
+    }
+  );
 });
 
-// Botón de Volver al Menú Principal
+// Procesar selección de AM o PM mediante botones
+bot.action(/^ampm_(AM|PM)$/, (ctx) => {
+  const ampm = ctx.match[1];
+  const userId = ctx.from.id;
+  const estado = usuariosEsperandoInput[userId];
+
+  if (!estado || !estado.horaParcial) {
+    return ctx.editMessageText('⚠️ La sesión expiró o hubo un error. Usa /configurar nuevamente.');
+  }
+
+  const hora24 = convertirA24h(estado.horaParcial, ampm);
+
+  if (estado.tipo === 'cierre') {
+    config.horaCierre = hora24;
+  } else {
+    config.horaApertura = hora24;
+  }
+
+  guardarConfig();
+  programarTareas();
+  delete usuariosEsperandoInput[userId];
+
+  ctx.editMessageText(
+    `✅ **¡Horario actualizado con éxito!** 🎉\n\n🌙 Nuevo Cierre: \`${config.horaCierre}\`\n☀️ Nueva Apertura: \`${config.horaApertura}\`\n\n¡Listo! Puedes usar /configurar cuando quieras cambiar algo más.`,
+    { parse_mode: 'Markdown' }
+  );
+});
+
+// Volver al Menú Principal
 bot.action('volver_menu', (ctx) => {
   delete usuariosEsperandoInput[ctx.from.id];
   ctx.editMessageText(
-    '⚙️ **Panel Principal de Configuración**\nSelecciona una opción:',
+    '⚙️ **Panel Principal de Configuración**\n\n¿Qué te gustaría ajustar hoy?',
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
         [Markup.button.callback('🌍 Cambiar Zona Horaria', 'menu_paises')],
-        [Markup.button.callback('🕒 Cambiar Horarios (Personalizar)', 'menu_horarios')]
+        [Markup.button.callback('🕒 Personalizar Horarios (12h)', 'menu_horarios')]
       ])
     }
   );
@@ -281,7 +330,7 @@ bot.action(/^tz_(.+)$/, (ctx) => {
   programarTareas();
 
   ctx.editMessageText(
-    `✅ **¡Zona horaria actualizada con éxito!**\n\n🌍 Nueva zona: \`${selectedTz}\`\n\nPuedes volver al menú escribiendo /configurar`,
+    `✅ **¡Zona horaria actualizada con éxito!** 🌍\n\nNueva zona: \`${selectedTz}\`\n\nPuedes volver al menú principal escribiendo /configurar`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -289,13 +338,13 @@ bot.action(/^tz_(.+)$/, (ctx) => {
 // Comando de estado
 bot.command('estado', (ctx) => {
   ctx.reply(
-    `📊 **Estado del Bot de Horarios**\n\n🌍 Zona: \`${config.timezone}\`\n🌙 Cierre: \`${config.horaCierre}\`\n☀️ Apertura: \`${config.horaApertura}\``,
+    `📊 **Estado Actual del Bot de Horarios**\n\n🌍 Zona: \`${config.timezone}\`\n🌙 Cierre (Modo Noche): \`${config.horaCierre}\`\n☀️ Apertura: \`${config.horaApertura}\``,
     { parse_mode: 'Markdown' }
   );
 });
 
 bot.launch().then(() => {
-  console.log("Bot avanzado iniciado correctamente...");
+  console.log("Bot moderno iniciado correctamente...");
 });
 
 process.once('SIGINT', () => bot.stop('SIGINT'));

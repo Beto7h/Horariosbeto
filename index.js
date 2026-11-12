@@ -50,14 +50,24 @@ http.createServer((req, res) => {
   console.log(`Servidor web escuchando en puerto ${port}`);
 });
 
-// Función formal y estricta para cerrar el grupo verificando su estado
+// Función para formatear el nombre de la zona horaria de forma limpia para el usuario
+function obtenerNombreZona(tz) {
+  if (tz.includes('Mexico_City')) return 'Zona México (Centro)';
+  if (tz.includes('Tijuana')) return 'Zona México (Noroeste / Tijuana)';
+  if (tz.includes('Cancun')) return 'Zona México (Sureste / Cancún)';
+  if (tz.includes('Buenos_Aires')) return 'Zona Argentina (Buenos Aires)';
+  if (tz.includes('Madrid')) return 'Zona España (Madrid / Málaga)';
+  if (tz.includes('Canary')) return 'Zona España (Islas Canarias)';
+  if (tz.includes('Bogota')) return 'Zona Colombia (Bogotá)';
+  return `Zona (${tz})`;
+}
+
+// Función para cerrar el grupo con el diseño exacto que solicitaste
 async function cerrarGrupo() {
   try {
-    // Verificar el estado actual del chat en Telegram
     const chatInfo = await bot.telegram.getChat(chatId);
     const permisosActuales = chatInfo.permissions;
 
-    // Si los permisos permiten enviar mensajes, significa que está abierto; procedemos a cerrarlo
     if (permisosActuales && permisosActuales.can_send_messages) {
       await bot.telegram.setChatPermissions(chatId, {
         can_send_messages: false,
@@ -71,8 +81,9 @@ async function cerrarGrupo() {
       console.log("El grupo ya se encontraba cerrado previamente.");
     }
     
-    // Mensaje formal para el Modo Noche
-    const mensaje = `🌙 **AVISO OFICIAL: INICIO DE MODO NOCTURNO**\n\nEstimada comunidad,\n\nSe les informa que el grupo ha entrado en su período de descanso reglamentario.\n\n🚫 **A partir de este momento, la emisión de mensajes y archivos multimedia queda suspendida temporalmente.**\n\n⏰ Las actividades y la apertura del chat se reanudarán puntualmente mañana a las **${config.horaApertura} hrs**.\n\nAgradecemos su comprensión y colaboración para mantener el orden. ¡Excelente descanso! ⚖️🏛️`;
+    // Texto exacto basado en tu imagen de referencia
+    const zonaTexto = obtenerNombreZona(config.timezone);
+    const mensaje = `🌙 **AVISO OFICIAL: INICIO DE MODO NOCTURNO** 🌖\n\nA partir de este momento, entramos en modo descanso. El grupo se abrirá de nuevo en un horario de las **${config.horaApertura} hrs**, ${zonaTexto}.`;
     
     await bot.telegram.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
   } catch (error) {
@@ -80,13 +91,12 @@ async function cerrarGrupo() {
   }
 }
 
-// Función para abrir el grupo con verificación previa
+// Función para abrir el grupo
 async function abrirGrupo() {
   try {
     const chatInfo = await bot.telegram.getChat(chatId);
     const permisosActuales = chatInfo.permissions;
 
-    // Si está cerrado, procedemos a abrirlo
     if (permisosActuales && !permisosActuales.can_send_messages) {
       await bot.telegram.setChatPermissions(chatId, {
         can_send_messages: true,
@@ -98,7 +108,9 @@ async function abrirGrupo() {
       console.log("El grupo estaba cerrado. Se ha procedido a su apertura.");
     }
 
-    const mensaje = `☀️ **REAPERTURA DE ACTIVIDADES** ☀️\n\n¡Buenos días a todos!\n\n🔓 El período de descanso ha concluido. El grupo se encuentra abierto nuevamente para la interacción de los miembros.\n\nLes recordamos mantener una convivencia respetuosa. ¡Que tengan un excelente día! 🚀✨`;
+    const zonaTexto = obtenerNombreZona(config.timezone);
+    const mensaje = `☀️ **AVISO OFICIAL: FIN DE MODO NOCTURNO** 🌅\n\nEl período de descanso ha concluido. El grupo se encuentra abierto nuevamente (${zonaTexto}). ¡Ya pueden enviar mensajes y fotos!`;
+    
     await bot.telegram.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
   } catch (error) {
     console.error("Error al ejecutar la apertura del grupo:", error);
@@ -362,7 +374,7 @@ bot.command('estado', (ctx) => {
 });
 
 bot.launch().then(() => {
-  console.log("Bot formal y seguro iniciado correctamente...");
+  console.log("Bot configurado con estilo formal e imagen de referencia iniciado correctamente...");
 });
 
 process.once('SIGINT', () => bot.stop('SIGINT'));

@@ -6,13 +6,13 @@ const path = require('path');
 
 const token = process.env.BOT_TOKEN;
 const chatId = process.env.CHAT_ID;
+const ownerId = process.env.OWNER_ID ? parseInt(process.env.OWNER_ID) : null;
 
 if (!token || !chatId) {
   console.error("Faltan las variables BOT_TOKEN o CHAT_ID");
   process.exit(1);
 }
 
-// Inicializar el bot de forma ligera y optimizada
 const bot = new Telegraf(token, {
   handlerTimeout: 90000
 });
@@ -38,9 +38,12 @@ function guardarConfig() {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 }
 
+// Variable para almacenar el ID del último mensaje de aviso nocturno y poder borrarlo luego
+let ultimoMensajeCierreId = null;
+
 const usuariosEsperandoInput = {};
 
-// Servidor HTTP optimizado y ultra rápido para Koyeb
+// Servidor web ligero para Koyeb
 const port = process.env.PORT || 8000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -76,9 +79,12 @@ async function cerrarGrupo() {
     }
     
     const zonaTexto = obtenerNombreZona(config.timezone);
+    // Título en negrita tal como lo pediste
     const mensaje = `🌙 **AVISO OFICIAL: INICIO DE MODO NOCTURNO** 🌖\n\nA partir de este momento, entramos en modo descanso. El grupo se abrirá de nuevo en un horario de las **${config.horaApertura} hrs**, ${zonaTexto}.`;
     
-    await bot.telegram.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
+    const sentMsg = await bot.telegram.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
+    // Guardamos el ID del mensaje nocturno para borrarlo por la mañana
+    ultimoMensajeCierreId = sentMsg.message_id;
   } catch (error) {
     console.error("Error al ejecutar el cierre del grupo:", error);
   }
@@ -97,7 +103,19 @@ async function abrirGrupo() {
       });
     }
 
+    // Autoeliminar el aviso de modo nocturno anterior si existe
+    if (ultimoMensajeCierreId) {
+      try {
+        await bot.telegram.deleteMessage(chatId, ultimoMensajeCierreId);
+        console.log("Mensaje de modo nocturno anterior eliminado con éxito.");
+      } catch (err) {
+        console.error("No se pudo eliminar el mensaje anterior (quizás ya fue borrado):", err);
+      }
+      ultimoMensajeCierreId = null; // Reiniciar variable
+    }
+
     const zonaTexto = obtenerNombreZona(config.timezone);
+    // Título de apertura en negrita
     const mensaje = `☀️ **AVISO OFICIAL: FIN DE MODO NOCTURNO** 🌅\n\nEl período de descanso ha concluido. El grupo se encuentra abierto nuevamente (${zonaTexto}). ¡Ya pueden enviar mensajes y fotos!`;
     
     await bot.telegram.sendMessage(chatId, mensaje, { parse_mode: 'Markdown' });
@@ -134,10 +152,19 @@ function convertirA24h(hora12, ampm) {
 }
 
 // ---------------------------------------------------------
-// MANEJADORES DE ACCIÓN Y COMANDOS (Optimización Instantánea)
+// RESTRICCIÓN DE PROPIETARIO Y COMANDOS
 // ---------------------------------------------------------
 
-bot.command('configurar', async (ctx) => {
+// Middleware para verificar si el usuario es el dueño autorizado
+function verificarOwner(ctx, next) {
+  // Si se configuró un OWNER_ID y el usuario no coincide, rechazar
+  if (ownerId && ctx.from.id !== ownerId) {
+    return ctx.reply('⛔ Lo siento, no tienes permisos autorizados para configurar este bot.');
+  }
+  return next();
+}
+
+bot.command('configurar', verificarOwner, async (ctx) => {
   delete usuariosEsperandoInput[ctx.from.id];
   await ctx.reply(
     '⚙️ **Panel Principal de Configuración**\n\n¿Qué parámetro desea ajustar?',
@@ -152,6 +179,7 @@ bot.command('configurar', async (ctx) => {
 });
 
 bot.action('menu_paises', async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   await ctx.editMessageText(
     '🌍 **Seleccione su país:**',
     {
@@ -168,6 +196,7 @@ bot.action('menu_paises', async (ctx) => {
 });
 
 bot.action('pais_mexico', async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   await ctx.editMessageText('🇲🇽 **México** - Seleccione su región:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
@@ -180,6 +209,7 @@ bot.action('pais_mexico', async (ctx) => {
 });
 
 bot.action('pais_argentina', async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   await ctx.editMessageText('🇦🇷 **Argentina**:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
@@ -190,6 +220,7 @@ bot.action('pais_argentina', async (ctx) => {
 });
 
 bot.action('pais_espana', async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   await ctx.editMessageText('🇪🇸 **España**:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
@@ -201,6 +232,7 @@ bot.action('pais_espana', async (ctx) => {
 });
 
 bot.action('pais_colombia', async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   await ctx.editMessageText('🇨🇴 **Colombia**:', {
     parse_mode: 'Markdown',
     ...Markup.inlineKeyboard([
@@ -211,6 +243,7 @@ bot.action('pais_colombia', async (ctx) => {
 });
 
 bot.action('menu_horarios', async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   delete usuariosEsperandoInput[ctx.from.id];
   await ctx.editMessageText(
     `🕒 **Configuración de Horarios**\n\n🌙 Cierre actual: \`${config.horaCierre}\`\n☀️ Apertura actual: \`${config.horaApertura}\`\n\n¿Qué horario desea modificar?`,
@@ -226,6 +259,7 @@ bot.action('menu_horarios', async (ctx) => {
 });
 
 bot.action('pedir_cierre', async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   usuariosEsperandoInput[ctx.from.id] = { tipo: 'cierre', esperandoAMPM: false };
   await ctx.editMessageText(
     '🌙 **Modo Cierre (Modo Noche)**\n\nEscriba la hora numérica del 1 al 12 (puede incluir minutos como `11` o `11:30`).\n\n*(Escriba el número directamente en el chat)*',
@@ -239,6 +273,7 @@ bot.action('pedir_cierre', async (ctx) => {
 });
 
 bot.action('pedir_apertura', async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   usuariosEsperandoInput[ctx.from.id] = { tipo: 'apertura', esperandoAMPM: false };
   await ctx.editMessageText(
     '☀️ **Modo Apertura (Mañana)**\n\nEscriba la hora numérica del 1 al 12 (puede incluir minutos como `7` o `7:30`).\n\n*(Escribe el número directamente en el chat)*',
@@ -280,6 +315,7 @@ bot.on('text', async (ctx) => {
 });
 
 bot.action(/^ampm_(AM|PM)$/, async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   const ampm = ctx.match[1];
   const userId = ctx.from.id;
   const estado = usuariosEsperandoInput[userId];
@@ -307,6 +343,7 @@ bot.action(/^ampm_(AM|PM)$/, async (ctx) => {
 });
 
 bot.action('volver_menu', async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   delete usuariosEsperandoInput[ctx.from.id];
   await ctx.editMessageText(
     '⚙️ **Panel Principal de Configuración**\n\n¿Qué parámetro desea ajustar?',
@@ -321,6 +358,7 @@ bot.action('volver_menu', async (ctx) => {
 });
 
 bot.action(/^tz_(.+)$/, async (ctx) => {
+  if (ownerId && ctx.from.id !== ownerId) return ctx.answerCbQuery('⛔ No autorizado.');
   const selectedTz = ctx.match[1];
   config.timezone = selectedTz;
   guardarConfig();
@@ -332,16 +370,15 @@ bot.action(/^tz_(.+)$/, async (ctx) => {
   );
 });
 
-bot.command('estado', async (ctx) => {
+bot.command('estado', verificarOwner, async (ctx) => {
   await ctx.reply(
     `📊 **Estado Actual del Bot de Horarios**\n\n🌍 Zona horaria: \`${config.timezone}\`\n🌙 Cierre (Modo Noche): \`${config.horaCierre}\`\n☀️ Apertura: \`${config.horaApertura}\``,
     { parse_mode: 'Markdown' }
   );
 });
 
-// Lanzamiento ultra optimizado
 bot.launch().then(() => {
-  console.log("Bot optimizado para alta velocidad iniciado.");
+  console.log("Bot avanzado con control de owner y autoeliminación iniciado.");
 });
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
